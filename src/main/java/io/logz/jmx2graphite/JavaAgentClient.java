@@ -46,12 +46,12 @@ public class JavaAgentClient extends MBeanClient {
     public List<MetricBean> getBeans() throws MBeanClientPollingFailure {
 
         try {
-            List<MetricBean> metricBeans = Lists.newArrayList();
             Set<ObjectInstance> instances = server.queryMBeans(null, null);
+            List<MetricBean> metricBeans = Lists.newArrayListWithCapacity(instances.size());
 
             for (ObjectInstance instance : instances) {
                 MBeanInfo mBeanInfo = server.getMBeanInfo(instance.getObjectName());
-                List<String> attributes = Lists.newArrayList();
+                List<String> attributes = Lists.newArrayListWithCapacity(mBeanInfo.getAttributes().length);
 
                 for (MBeanAttributeInfo attribute : mBeanInfo.getAttributes()) {
                     attributes.add(attribute.getName());
@@ -77,20 +77,20 @@ public class JavaAgentClient extends MBeanClient {
                 AttributeList attributeList = server.getAttributes(new ObjectName(metricBean.getName()),
                                                                    metricBean.getAttributes().toArray(new String[0]));
 
-                Map<String, Object> attrValues = new HashMap<>(attributeList.size());
+                Map<String, Object> attrValues = Maps.newHashMapWithExpectedSize(attributeList.size());
                 attributeList.asList().forEach((attr) ->
                         attrValues.put(attr.getName(), attr.getValue()));
 
                 Map<String, Number> metricToValue = flatten(attrValues);
 
-                for (String attrMetricName : metricToValue.keySet()) {
+                for (Map.Entry<String, Number> entry : metricToValue.entrySet()) {
                     try {
                         metricValues.add(new MetricValue(
-                                GraphiteClient.sanitizeMetricName(metricBean.getName(), /*keepDot*/ true) + "." + attrMetricName,
-                                metricToValue.get(attrMetricName),
+                                GraphiteClient.sanitizeMetricName(metricBean.getName(), /*keepDot*/ true) + "." + entry.getKey(),
+                                entry.getValue(),
                                 metricTime));
                     } catch (IllegalArgumentException e) {
-                        logger.info("Failed converting metric name to Graphite-friendly name: metricsBean.getName = {}, attrMetricName = {}", metricBean.getName(), attrMetricName, e);
+                        logger.info("Failed converting metric name to Graphite-friendly name: metricsBean.getName = {}, attrMetricName = {}", metricBean.getName(), entry.getKey(), e);
                     }
                 }
             } catch (MalformedObjectNameException | ReflectionException | InstanceNotFoundException | IllegalArgumentException e ) {
@@ -104,31 +104,31 @@ public class JavaAgentClient extends MBeanClient {
     private Map<String, Number> flatten(Map<String, Object> attrValues) {
 
         Map<String, Number> metricValues = Maps.newHashMap();
-        for (String key : attrValues.keySet()) {
-            Object value = attrValues.get(key);
+        for (Map.Entry<String, Object> entry : attrValues.entrySet()) {
+            Object value = entry.getValue();
             if (value == null) {
                 continue;
             }
             if (value.getClass().isArray()) continue;
             else if (value instanceof Number) {
-                metricValues.put(GraphiteClient.sanitizeMetricName(key, /*keepDot*/ false), (Number) value);
+                metricValues.put(GraphiteClient.sanitizeMetricName(entry.getKey(), /*keepDot*/ false), (Number) value);
             } else if (value instanceof CompositeData) {
                 CompositeData data = (CompositeData) value;
                 Map<String, Object> valueMap = handleCompositeData(data);
-                metricValues.putAll(prependKey(key, flatten(valueMap)));
+                metricValues.putAll(prependKey(entry.getKey(), flatten(valueMap)));
             } else if (value instanceof TabularData) {
                 TabularData tabularData = (TabularData) value;
                 Map<String, Object> rowKeyToRowData = handleTabularData(tabularData);
-                metricValues.putAll(prependKey(key, flatten(rowKeyToRowData)));
+                metricValues.putAll(prependKey(entry.getKey(), flatten(rowKeyToRowData)));
             } else if (!(value instanceof String) && !(value instanceof Boolean)) {
                 Map<String, Object> valueMap;
                 try {
                     valueMap = objectMapper.convertValue(value, new TypeReference<Map<String, Object>>() {});
                 } catch (Exception e) {
-                    logger.trace("Can't convert attribute named {} with class type {}", key, value.getClass().getCanonicalName());
+                    logger.trace("Can't convert attribute named {} with class type {}", entry.getKey(), value.getClass().getCanonicalName());
                     continue;
                 }
-                metricValues.putAll(prependKey(key, flatten(valueMap)));
+                metricValues.putAll(prependKey(entry.getKey(), flatten(valueMap)));
             }
         }
         return metricValues;
@@ -158,16 +158,16 @@ public class JavaAgentClient extends MBeanClient {
     }
 
     private Map<String, Number> prependKey(String key, Map<String, Number> keyToNumber) {
-        Map<String, Number> result = new HashMap<>();
-        for (String internalMetricName : keyToNumber.keySet()) {
+        Map<String, Number> result = Maps.newHashMapWithExpectedSize(keyToNumber.size());
+        for (Map.Entry<String, Number> entry : keyToNumber.entrySet()) {
             String resultKey;
             if (key.equalsIgnoreCase("value")) {
-                resultKey =  GraphiteClient.sanitizeMetricName(internalMetricName, /*keepDot*/ false);
+                resultKey =  GraphiteClient.sanitizeMetricName(entry.getKey(), /*keepDot*/ false);
             } else {
                 resultKey = GraphiteClient.sanitizeMetricName(key, /*keepDot*/ false) + "."
-                        + GraphiteClient.sanitizeMetricName(internalMetricName, /*keepDot*/ false);
+                        + GraphiteClient.sanitizeMetricName(entry.getKey(), /*keepDot*/ false);
             }
-            result.put(resultKey, keyToNumber.get(internalMetricName));
+            result.put(resultKey, entry.getValue());
         }
         return result;
     }

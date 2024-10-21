@@ -46,7 +46,7 @@ public class Jmx2GraphiteJavaAgent {
 
           // Catching anything, because if we throw exception here, it will stop the main thread as well.
         } catch (Throwable e) {
-            logger.error("Stopping jmx2graphite Java Agent due to unexpected exception: "+e.getMessage(), e);
+            logger.error("Stopping jmx2graphite Java Agent due to unexpected exception: {}", e.getMessage(), e);
         }
     }
 

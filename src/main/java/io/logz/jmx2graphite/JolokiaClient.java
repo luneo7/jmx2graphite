@@ -69,7 +69,7 @@ public class JolokiaClient extends MBeanClient {
     }
 
     public List<MetricValue> getMetrics(List<MetricBean> beans) throws MBeanClientPollingFailure {
-        List<JolokiaReadRequest> readRequests = Lists.newArrayList();
+        List<JolokiaReadRequest> readRequests = Lists.newArrayListWithCapacity(beans.size());
         for (MetricBean bean : beans) {
             readRequests.add(new JolokiaReadRequest(bean.getName(), bean.getAttributes()));
         }
@@ -102,7 +102,7 @@ public class JolokiaClient extends MBeanClient {
                 if (status != 200) {
                     String errMsg = "Failed reading mbean '" + mbeanName +"': "+status+" - "+response.get("error");
                     if (logger.isDebugEnabled()) {
-                        logger.debug(errMsg +". Stacktrace = {}", response.get("stacktrace"));
+                        logger.debug("{}. Stacktrace = {}", errMsg, response.get("stacktrace"));
                     } else {
                         logger.warn(errMsg);
                     }
@@ -112,14 +112,14 @@ public class JolokiaClient extends MBeanClient {
 
                 Map<String, Object> attrValues = (Map<String, Object>) response.get("value");
                 Map<String, Number> metricToValue = flatten(attrValues);
-                for (String attrMetricName : metricToValue.keySet()) {
+                for (Map.Entry<String, Number> entry : metricToValue.entrySet()) {
                     try {
                         metricValues.add(new MetricValue(
-                                GraphiteClient.sanitizeMetricName(mbeanName, /*keepDot*/ true) + "." + attrMetricName,
-                                metricToValue.get(attrMetricName),
+                                GraphiteClient.sanitizeMetricName(mbeanName, /*keepDot*/ true) + "." + entry.getKey(),
+                                entry.getValue(),
                                 metricTime));
                     } catch (IllegalArgumentException e) {
-                        logger.info("Can't sent Metric since it's invalid: "+e.getMessage());
+                        logger.info("Can't sent Metric since it's invalid: {}", e.getMessage());
                     }
                 }
             }
@@ -131,14 +131,14 @@ public class JolokiaClient extends MBeanClient {
 
     private List<MetricBean> extractMetricsBeans(Map<String, Object> domains) {
         List<MetricBean> result = Lists.newArrayList();
-        for (String domainName : domains.keySet()) {
-            Map<String, Object> domain = (Map<String, Object>) domains.get(domainName);
-            for (String mbeanName : domain.keySet()) {
-                Map<String, Object> mbean = (Map<String, Object>) domain.get(mbeanName);
+        for (Map.Entry<String, Object> entry : domains.entrySet()) {
+            Map<String, Object> domain = (Map<String, Object>) entry.getValue();
+            for (Map.Entry<String, Object> internalEntry : domain.entrySet()) {
+                Map<String, Object> mbean = (Map<String, Object>) internalEntry.getValue();
                 Map<String, Object> attributes = (Map<String, Object>) mbean.get("attr");
                 if (attributes != null) {
                     List<String> attrNames = new ArrayList<String>(attributes.keySet());
-                    result.add(new MetricBean(domainName + ":" + mbeanName, attrNames));
+                    result.add(new MetricBean(entry.getKey() + ":" + internalEntry.getKey(), attrNames));
                 }
             }
         }
@@ -147,20 +147,20 @@ public class JolokiaClient extends MBeanClient {
 
     private static Map<String, Number> flatten(Map<String, Object> attrValues) {
         Map<String, Number> metricValues = Maps.newHashMap();
-        for (String key : attrValues.keySet()) {
-            Object value = attrValues.get(key);
+        for (Map.Entry<String, Object> entry : attrValues.entrySet()) {
+            Object value = entry.getValue();
             if (value instanceof Map) {
                 Map<String, Number> flattenValueTree = flatten((Map) value);
 
-                for (String internalMetricName : flattenValueTree.keySet()) {
+                for (Map.Entry<String, Number> internalEntry : flattenValueTree.entrySet()) {
                     metricValues.put(
-                            GraphiteClient.sanitizeMetricName(key, /*keepDot*/ false) + "."
-                                    + GraphiteClient.sanitizeMetricName(internalMetricName, /*keepDot*/ false),
-                            flattenValueTree.get(internalMetricName));
+                            GraphiteClient.sanitizeMetricName(entry.getKey(), /*keepDot*/ false) + "."
+                                    + GraphiteClient.sanitizeMetricName(internalEntry.getKey(), /*keepDot*/ false),
+                            internalEntry.getValue());
                 }
             } else {
                 if (value instanceof Number) {
-                    metricValues.put(GraphiteClient.sanitizeMetricName(key, /*keepDot*/ false), (Number) value);
+                    metricValues.put(GraphiteClient.sanitizeMetricName(entry.getKey(), /*keepDot*/ false), (Number) value);
                 }
             }
         }

@@ -1,7 +1,6 @@
 package io.logz.jmx2graphite;
 
 import com.codahale.metrics.graphite.GraphiteSender;
-import com.google.common.base.Throwables;
 import com.google.common.io.Closeables;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.nurkiewicz.asyncretry.AsyncRetryExecutor;
@@ -260,7 +259,7 @@ public class PickledGraphite implements GraphiteSender {
 
         this.socket = socketFactory.createSocket(address.getAddress(), address.getPort());
         this.writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), charset));
-        LOGGER.debug("Connected to graphite at "+address);
+        LOGGER.debug("Connected to graphite at {}", address);
     }
 
     @Override
@@ -339,11 +338,12 @@ public class PickledGraphite implements GraphiteSender {
         try {
             executor.doWithRetry(retryContext -> {
                 if (retryContext.getRetryCount() > 0) {
-                    LOGGER.info("Failed writing metrics (Error: "+retryContext.getLastThrowable()+"). Trying again (Retry #"+retryContext.getRetryCount()+")");
+                    LOGGER.info("Failed writing metrics (Error: {}). Trying again (Retry #{})", retryContext.getLastThrowable(),
+                                retryContext.getRetryCount());
                 }
                 tryWritingMetrics();
                 if (retryContext.getRetryCount() > 0) {
-                    LOGGER.info("Successfully wrote metrics at attempt #"+(retryContext.getRetryCount()+1));
+                    LOGGER.info("Successfully wrote metrics at attempt #{}", retryContext.getRetryCount() + 1);
                 }
             }).get(writeTimeoutMs, TimeUnit.MILLISECONDS);
 

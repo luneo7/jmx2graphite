@@ -89,9 +89,9 @@ public class MetricsPipeline {
 
         } catch (GraphiteClient.GraphiteWriteFailed e) {
             if (logger.isDebugEnabled()) {
-                logger.debug("Failed writing to Graphite: " + e.getMessage(), e);
+                logger.debug("Failed writing to Graphite: {}", e.getMessage(), e);
             } else {
-                logger.warn("Failed writing to Graphite: " + e.getMessage());
+                logger.warn("Failed writing to Graphite: {}", e.getMessage());
             }
         } catch (Throwable t) {
             logger.error("Unexpected error occured while polling and sending. Error = {}", t.getMessage(), t);
@@ -126,7 +126,7 @@ public class MetricsPipeline {
         try {
             graphiteClient.close();
         } catch (IOException e) {
-            logger.info("Failed closing graphite client. Error = "+e.getMessage(), e);
+            logger.info("Failed closing graphite client. Error = {}", e.getMessage(), e);
         }
     }
 }

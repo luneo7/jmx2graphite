@@ -57,7 +57,7 @@ public class Jmx2GraphiteConfiguration {
         MBEAN_PLATFORM
     }
 
-    private class Graphite {
+    private static class Graphite {
         public String hostname;
         public int port;
     }
